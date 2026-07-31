@@ -1,0 +1,12 @@
+# Build output
+bin/
+obj/
+*.user
+
+# IDE
+.vs/
+.idea/
+
+# Local test data / scratch
+bgm_sheet.csv
+agent-tools/

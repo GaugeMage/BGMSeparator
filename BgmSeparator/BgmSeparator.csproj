@@ -1,0 +1,26 @@
+<Project Sdk="Dalamud.NET.Sdk/15.0.0">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Platform>x64</Platform>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Version>0.1.0.0</Version>
+    <AssemblyName>BgmSeparator</AssemblyName>
+    <RootNamespace>BgmSeparator</RootNamespace>
+    <!-- Produces bin/x64/Release/BgmSeparator/latest.zip on Release build -->
+    <DalamudPackagerOutputPath>$(OutputPath)</DalamudPackagerOutputPath>
+  </PropertyGroup>
+
+  <!--
+    NuGet deps for audio. These DLLs are copied to the plugin output and bundled
+    into latest.zip so they ship with the plugin. Dalamud already provides
+    Lumina / Lumina.Excel / FFXIVClientStructs via the SDK, so we don't add them.
+  -->
+  <ItemGroup>
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="NVorbis" Version="0.10.5" />
+  </ItemGroup>
+
+</Project>
