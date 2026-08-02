@@ -9,5 +9,5 @@
   "ApplicableVersion": "any",
   "LoadRequiredState": 0,
   "CanUnloadAsync": false,
-  "IconUrl": ""
+  "IconUrl": "https://raw.githubusercontent.com/GaugeMage/BGMSeparator/main/BgmSeparator/images/icon.png"
 }

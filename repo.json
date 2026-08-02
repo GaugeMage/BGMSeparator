@@ -17,7 +17,7 @@
       "orchestrion"
     ],
     "DalamudApiLevel": 15,
-    "IconUrl": "",
+    "IconUrl": "https://raw.githubusercontent.com/GaugeMage/BGMSeparator/main/BgmSeparator/images/icon.png",
     "DownloadCount": 0,
     "DownloadLinkInstall": "https://github.com/GaugeMage/BGMSeparator/releases/latest/download/latest.zip",
     "DownloadLinkUpdate": "https://github.com/GaugeMage/BGMSeparator/releases/latest/download/latest.zip",
