@@ -3,7 +3,7 @@
     "Author": "GaugeMage",
     "Name": "BGM Separator",
     "InternalName": "BgmSeparator",
-    "AssemblyVersion": "0.1.0.0",
+    "AssemblyVersion": "0.1.1.0",
     "Description": "Detects the currently playing FFXIV BGM, decodes the game's own music file, and plays it out through an audio device you choose (e.g. a virtual audio cable). Combined with muting the game's built-in BGM, this lets OBS capture the music on a separate source that you can include in recordings but leave off the stream track. See the README for OBS routing.",
     "Punchline": "Routes FFXIV's background music to its own audio device so streamers can keep BGM in VODs while excluding it from the live stream.",
     "ApplicableVersion": "any",

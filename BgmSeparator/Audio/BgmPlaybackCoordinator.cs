@@ -20,8 +20,7 @@ public sealed class BgmPlaybackCoordinator : IDisposable
     private sealed class Track : IDisposable
     {
         public required VorbisLoopSampleProvider Source;
-        public required FadeInOutSampleProvider Fade;
-        public required VolumeSampleProvider Volume;
+        public required FadeSampleProvider Fade;
         public void Dispose() => Source.Dispose();
     }
 
@@ -75,7 +74,7 @@ public sealed class BgmPlaybackCoordinator : IDisposable
     {
         lock (_lock)
         {
-            if (_current != null) _current.Volume.Volume = _config.Volume;
+            if (_current != null) _current.Fade.Volume = _config.Volume;
         }
     }
 
@@ -108,9 +107,8 @@ public sealed class BgmPlaybackCoordinator : IDisposable
                 if (chain.WaveFormat.SampleRate != AudioEngine.MixFormat.SampleRate)
                     chain = new WdlResamplingSampleProvider(chain, AudioEngine.MixFormat.SampleRate);
 
-                var fade = new FadeInOutSampleProvider(chain, initiallySilent: true);
-                fade.BeginFadeIn(Math.Max(1, _config.CrossfadeMs));
-                var vol = new VolumeSampleProvider(fade) { Volume = _config.Volume };
+                var fade = new FadeSampleProvider(chain, startSilent: true) { Volume = _config.Volume };
+                fade.BeginFadeIn(_config.FadeInMs);
 
                 lock (_lock)
                 {
@@ -122,8 +120,8 @@ public sealed class BgmPlaybackCoordinator : IDisposable
 
                     FadeOutCurrent();
 
-                    _current = new Track { Source = src, Fade = fade, Volume = vol };
-                    _engine.AddInput(vol);
+                    _current = new Track { Source = src, Fade = fade };
+                    _engine.AddInput(fade);
                 }
             }
             catch (Exception ex)
@@ -143,11 +141,11 @@ public sealed class BgmPlaybackCoordinator : IDisposable
         }
         if (old == null) return;
 
-        var fadeMs = Math.Max(1, _config.CrossfadeMs);
+        var fadeMs = Math.Max(1, _config.FadeOutMs);
         old.Fade.BeginFadeOut(fadeMs);
-        Task.Delay(fadeMs + 100).ContinueWith(_ =>
+        Task.Delay(fadeMs + 250).ContinueWith(_ =>
         {
-            _engine.RemoveInput(old.Volume);
+            _engine.RemoveInput(old.Fade);
             old.Dispose();
         });
     }

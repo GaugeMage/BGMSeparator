@@ -79,10 +79,16 @@ public sealed class ConfigWindow : Window, IDisposable
         }
         if (ImGui.IsItemDeactivatedAfterEdit()) _config.Save();
 
-        var crossfade = _config.CrossfadeMs;
-        if (ImGui.SliderInt("Crossfade (ms)", ref crossfade, 0, 2000))
-            _config.CrossfadeMs = crossfade;
+        var fadeIn = _config.FadeInMs;
+        if (ImGui.SliderInt("Fade in (ms)", ref fadeIn, 0, 12000))
+            _config.FadeInMs = fadeIn;
         if (ImGui.IsItemDeactivatedAfterEdit()) _config.Save();
+
+        var fadeOut = _config.FadeOutMs;
+        if (ImGui.SliderInt("Fade out (ms)", ref fadeOut, 0, 12000))
+            _config.FadeOutMs = fadeOut;
+        if (ImGui.IsItemDeactivatedAfterEdit()) _config.Save();
+        ImGui.TextDisabled("Fades ramp in decibels, like the game. Zone/teleport fade-ins\nare long in FFXIV, so try 4000-8000 ms to match.");
 
         var loopUntagged = _config.LoopUntaggedTracks;
         if (ImGui.Checkbox("Loop tracks with no loop points", ref loopUntagged))
