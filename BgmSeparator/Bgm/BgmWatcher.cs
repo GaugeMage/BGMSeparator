@@ -14,6 +14,9 @@ public sealed class BgmWatcher : IDisposable
     /// <summary>The BGM row id the game is currently playing at the highest scene (0 = none).</summary>
     public int CurrentSongId { get; private set; }
 
+    /// <summary>The scene index (0-11) the current song was found at (-1 = none). Higher-priority = lower index.</summary>
+    public int CurrentSceneIndex { get; private set; } = -1;
+
     /// <summary>Fires with (oldSongId, newSongId) whenever the audible song changes.</summary>
     public event Action<int, int>? SongChanged;
 
@@ -35,6 +38,7 @@ public sealed class BgmWatcher : IDisposable
 
         var scenes = (BgmScene*)listPtr;
         ushort current = 0;
+        var currentScene = -1;
 
         for (var i = 0; i < SceneCount; i++)
         {
@@ -43,6 +47,7 @@ public sealed class BgmWatcher : IDisposable
             if (id != 0 && id != 9999)
             {
                 current = id;
+                currentScene = i;
                 break; // highest-priority non-empty scene wins
             }
         }
@@ -51,6 +56,7 @@ public sealed class BgmWatcher : IDisposable
         {
             var old = CurrentSongId;
             CurrentSongId = current;
+            CurrentSceneIndex = currentScene;
             try
             {
                 SongChanged?.Invoke(old, current);

@@ -16,6 +16,7 @@ public class Services
     [PluginService] public static IFramework Framework { get; private set; } = null!;
     [PluginService] public static IGameConfig GameConfig { get; private set; } = null!;
     [PluginService] public static ICommandManager CommandManager { get; private set; } = null!;
+    [PluginService] public static IChatGui ChatGui { get; private set; } = null!;
     [PluginService] public static IPluginLog Log { get; private set; } = null!;
 
     public static void Init(IDalamudPluginInterface pi)

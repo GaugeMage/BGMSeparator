@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Numerics;
 using BgmSeparator.Audio;
+using BgmSeparator.Diagnostics;
 using Dalamud.Interface.Windowing;
 using Dalamud.Bindings.ImGui;
 
@@ -11,15 +14,17 @@ public sealed class ConfigWindow : Window, IDisposable
 {
     private readonly Configuration _config;
     private readonly BgmPlaybackCoordinator _coordinator;
+    private readonly BgmDiagnostics _diagnostics;
 
     private List<AudioDeviceInfo> _devices = new();
 
-    public ConfigWindow(Configuration config, BgmPlaybackCoordinator coordinator)
+    public ConfigWindow(Configuration config, BgmPlaybackCoordinator coordinator, BgmDiagnostics diagnostics)
         : base("BGM Separator###BgmSeparatorConfig")
     {
         _config = config;
         _coordinator = coordinator;
-        Size = new Vector2(460, 340);
+        _diagnostics = diagnostics;
+        Size = new Vector2(460, 420);
         SizeCondition = ImGuiCond.FirstUseEver;
         RefreshDevices();
     }
@@ -79,17 +84,6 @@ public sealed class ConfigWindow : Window, IDisposable
         }
         if (ImGui.IsItemDeactivatedAfterEdit()) _config.Save();
 
-        var fadeIn = _config.FadeInMs;
-        if (ImGui.SliderInt("Fade in (ms)", ref fadeIn, 0, 12000))
-            _config.FadeInMs = fadeIn;
-        if (ImGui.IsItemDeactivatedAfterEdit()) _config.Save();
-
-        var fadeOut = _config.FadeOutMs;
-        if (ImGui.SliderInt("Fade out (ms)", ref fadeOut, 0, 12000))
-            _config.FadeOutMs = fadeOut;
-        if (ImGui.IsItemDeactivatedAfterEdit()) _config.Save();
-        ImGui.TextDisabled("Fades ramp in decibels, like the game. Zone/teleport fade-ins\nare long in FFXIV, so try 4000-8000 ms to match.");
-
         var loopUntagged = _config.LoopUntaggedTracks;
         if (ImGui.Checkbox("Loop tracks with no loop points", ref loopUntagged))
         {
@@ -107,6 +101,71 @@ public sealed class ConfigWindow : Window, IDisposable
             _coordinator.ApplyMuteSettingChange();
         }
         ImGui.TextDisabled("Keeps FFXIV's music out of your main desktop-audio capture so\nonly the separated source carries it.");
+
+        DrawDiagnostics();
+    }
+
+    private void DrawDiagnostics()
+    {
+        ImGui.Separator();
+        ImGui.TextUnformatted("Live state");
+
+        var gameSong = _coordinator.GameSongId;
+        var pluginSong = _coordinator.CurrentTrackId;
+        var scene = _coordinator.GameSceneIndex;
+        var battle = _coordinator.IsBattle;
+
+        // A game BGM with no playable file (cutscene/placeholder) should be treated as
+        // silence for us, since there's nothing to route.
+        var gamePlayable = gameSong != 0 && ScdBgmLoader.GetScdPath(gameSong) != null;
+        var effectiveGame = gamePlayable ? gameSong : 0;
+
+        var gameLabel = gameSong == 0 ? "(silence)" : gamePlayable ? gameSong.ToString() : $"{gameSong} (no track)";
+        ImGui.TextUnformatted($"Game BGM: {gameLabel}   scene {scene}   {(battle ? "battle" : "field")}");
+
+        var matched = effectiveGame == pluginSong;
+        var col = matched ? new Vector4(0.4f, 1f, 0.4f, 1f) : new Vector4(1f, 0.8f, 0.3f, 1f);
+        ImGui.TextColored(col, $"Plugin playing: {(pluginSong == 0 ? "(silence)" : pluginSong.ToString())}{(matched ? "  (in sync)" : "  (transitioning)")}");
+
+        ImGui.Separator();
+        ImGui.TextUnformatted("Diagnostics (optional, local only)");
+
+        if (_diagnostics.IsRecording)
+        {
+            if (ImGui.Button("Stop recording"))
+            {
+                _diagnostics.Stop();
+            }
+            ImGui.SameLine();
+            ImGui.TextColored(new Vector4(1f, 0.4f, 0.4f, 1f), "Recording BGM state...");
+        }
+        else
+        {
+            if (ImGui.Button("Record BGM state"))
+            {
+                _diagnostics.Start(() => _coordinator.CurrentTrackId);
+            }
+        }
+
+
+        if (!string.IsNullOrEmpty(_diagnostics.CurrentPath))
+        {
+            if (ImGui.SmallButton("Open folder"))
+            {
+                try
+                {
+                    var dir = Path.GetDirectoryName(_diagnostics.CurrentPath);
+                    if (!string.IsNullOrEmpty(dir))
+                        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{dir}\"") { UseShellExecute = true });
+                }
+                catch (Exception ex)
+                {
+                    Services.Log.Error(ex, "[BgmSeparator] Failed to open diagnostics folder");
+                }
+            }
+            ImGui.SameLine();
+            ImGui.TextDisabled(Path.GetFileName(_diagnostics.CurrentPath));
+        }
     }
 
     public void Dispose() { }

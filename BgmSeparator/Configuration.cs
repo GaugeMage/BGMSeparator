@@ -31,15 +31,6 @@ public class Configuration : IPluginConfiguration
     public bool MuteInGameBgm { get; set; } = true;
 
     /// <summary>
-    /// How long a newly-started BGM fades up, in milliseconds. FFXIV's zone/teleport
-    /// fade-ins are long (often 4-10s), so this can go well past a couple seconds.
-    /// </summary>
-    public int FadeInMs { get; set; } = 3000;
-
-    /// <summary>How long the previous BGM fades out when a new song starts, in milliseconds.</summary>
-    public int FadeOutMs { get; set; } = 3000;
-
-    /// <summary>
     /// If a track has no LOOPSTART/LOOPEND tags, loop the whole file when true,
     /// or play once (like a fanfare) when false.
     /// </summary>

@@ -17,10 +17,16 @@ public sealed class BgmPlaybackCoordinator : IDisposable
     // FFXIV "Mute BGM" checkbox in Sound settings. Name matches SystemConfigOption.IsSndBgm.
     private const string BgmMuteKey = "IsSndBgm";
 
+    // Fade fallbacks (ms) used only when the game doesn't supply its own fade timing.
+    // Combat stays tight; field transitions get a gentle fade. Not user-facing by design.
+    private const int CombatFadeMs = 400;
+    private const int FieldFadeMs = 2000;
+
     private sealed class Track : IDisposable
     {
         public required VorbisLoopSampleProvider Source;
         public required FadeSampleProvider Fade;
+        public int SceneIndex = -1;
         public void Dispose() => Source.Dispose();
     }
 
@@ -31,6 +37,19 @@ public sealed class BgmPlaybackCoordinator : IDisposable
     private readonly object _lock = new();
     private Track? _current;
     private int _loadToken;
+    private int _currentSongId;
+
+    /// <summary>The BGM id the plugin is currently outputting (0 = none). Used by diagnostics.</summary>
+    public int CurrentTrackId => _currentSongId;
+
+    /// <summary>The BGM id the game itself reports as audible right now (matches Orchestrion). 0 = silence.</summary>
+    public int GameSongId => _watcher.CurrentSongId;
+
+    /// <summary>The scene index (0-11) the game's audible song is playing at. -1 = none.</summary>
+    public int GameSceneIndex => _watcher.CurrentSceneIndex;
+
+    /// <summary>True while the game has battle BGM active.</summary>
+    public bool IsBattle => GameAudioState.IsBattleBgm();
 
     private bool _bgmMuted;
     private bool _savedBgmMute;
@@ -64,6 +83,7 @@ public sealed class BgmPlaybackCoordinator : IDisposable
             _engine.ClearInputs();
             _current?.Dispose();
             _current = null;
+            _currentSongId = 0;
         }
         MuteGameBgm(false);
     }
@@ -85,18 +105,30 @@ public sealed class BgmPlaybackCoordinator : IDisposable
         if (!_config.Enabled) return;
 
         var token = ++_loadToken;
+        var newScene = _watcher.CurrentSceneIndex;
 
         if (newSong == 0)
         {
+            // Game went silent: fade out using the stopping scene's own timing so we cut
+            // as promptly as the game does (short in combat, long for zone changes).
             FadeOutCurrent();
             return;
         }
+
+        var fadeInMs = ResolveFadeIn(newScene);
 
         // Decode off the framework thread to avoid frame hitches.
         Task.Run(() =>
         {
             var ogg = ScdBgmLoader.LoadOgg(newSong);
-            if (ogg == null) return;
+            if (ogg == null)
+            {
+                // The game switched to a BGM with no playable file (e.g. a cutscene or
+                // placeholder like row 1). Match the game and go silent instead of looping
+                // the previous track forever.
+                if (token == _loadToken) FadeOutCurrent();
+                return;
+            }
 
             try
             {
@@ -108,7 +140,7 @@ public sealed class BgmPlaybackCoordinator : IDisposable
                     chain = new WdlResamplingSampleProvider(chain, AudioEngine.MixFormat.SampleRate);
 
                 var fade = new FadeSampleProvider(chain, startSilent: true) { Volume = _config.Volume };
-                fade.BeginFadeIn(_config.FadeInMs);
+                fade.BeginFadeIn(fadeInMs);
 
                 lock (_lock)
                 {
@@ -120,13 +152,15 @@ public sealed class BgmPlaybackCoordinator : IDisposable
 
                     FadeOutCurrent();
 
-                    _current = new Track { Source = src, Fade = fade };
+                    _current = new Track { Source = src, Fade = fade, SceneIndex = newScene };
+                    _currentSongId = newSong;
                     _engine.AddInput(fade);
                 }
             }
             catch (Exception ex)
             {
                 Services.Log.Error(ex, $"[BgmSeparator] Failed to start BGM {newSong}");
+                if (token == _loadToken) FadeOutCurrent();
             }
         });
     }
@@ -138,16 +172,35 @@ public sealed class BgmPlaybackCoordinator : IDisposable
         {
             old = _current;
             _current = null;
+            _currentSongId = 0;
         }
         if (old == null) return;
 
-        var fadeMs = Math.Max(1, _config.FadeOutMs);
+        var fadeMs = Math.Max(1, ResolveFadeOut(old.SceneIndex));
         old.Fade.BeginFadeOut(fadeMs);
         Task.Delay(fadeMs + 250).ContinueWith(_ =>
         {
             _engine.RemoveInput(old.Fade);
             old.Dispose();
         });
+    }
+
+    // Fade duration precedence:
+    //   1) the game's own custom fade time for that scene (exact match to the game), else
+    //   2) a short "combat" fade while battle BGM is active so rapid phase flips stay tight, else
+    //   3) the user's slider (cinematic zone/teleport fades).
+    private static int ResolveFadeIn(int sceneIndex)
+    {
+        if (GameAudioState.TryGetSceneFade(sceneIndex, out var fi, out _) && fi > 0)
+            return fi;
+        return GameAudioState.IsBattleBgm() ? CombatFadeMs : FieldFadeMs;
+    }
+
+    private static int ResolveFadeOut(int sceneIndex)
+    {
+        if (GameAudioState.TryGetSceneFade(sceneIndex, out _, out var fo) && fo > 0)
+            return fo;
+        return GameAudioState.IsBattleBgm() ? CombatFadeMs : FieldFadeMs;
     }
 
     private void MuteGameBgm(bool mute)
