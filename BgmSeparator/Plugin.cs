@@ -37,7 +37,8 @@ public sealed class Plugin : IDalamudPlugin
 
         Services.CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
-            HelpMessage = "Open settings. \"/bgmsep diag\" toggles BGM state recording (for Ultimate music capture).",
+            HelpMessage = "Open settings. \"/bgmsep toggle\" (or on/off) flips the separated output - "
+                        + "put it in a macro to bind a key. \"/bgmsep diag\" toggles BGM state recording.",
         });
 
         if (_config.Enabled)
@@ -50,6 +51,24 @@ public sealed class Plugin : IDalamudPlugin
     private void OnCommand(string command, string args)
     {
         var arg = args.Trim().ToLowerInvariant();
+
+        switch (arg)
+        {
+            case "toggle":
+                ReportEnabled(_coordinator.ToggleEnabled());
+                return;
+
+            case "on":
+            case "enable":
+                ReportEnabled(_coordinator.SetEnabled(true));
+                return;
+
+            case "off":
+            case "disable":
+                ReportEnabled(_coordinator.SetEnabled(false));
+                return;
+        }
+
         if (arg.StartsWith("diag"))
         {
             ToggleDiagnostics(arg);
@@ -58,6 +77,11 @@ public sealed class Plugin : IDalamudPlugin
 
         OpenConfig();
     }
+
+    private static void ReportEnabled(bool enabled) => Services.ChatGui.Print(
+        enabled
+            ? "[BGM Separator] Separated BGM output on (game BGM muted)."
+            : "[BGM Separator] Separated BGM output off (game BGM restored).");
 
     private void ToggleDiagnostics(string arg)
     {

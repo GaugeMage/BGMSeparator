@@ -35,12 +35,8 @@ public sealed class ConfigWindow : Window, IDisposable
     {
         var enabled = _config.Enabled;
         if (ImGui.Checkbox("Enable separated BGM output", ref enabled))
-        {
-            _config.Enabled = enabled;
-            _config.Save();
-            if (enabled) _coordinator.Start();
-            else _coordinator.Stop();
-        }
+            _coordinator.SetEnabled(enabled);
+        ImGui.TextDisabled("Keybind it: make a macro with \"/bgmsep toggle\" and drag it to a hotbar.");
 
         ImGui.Separator();
         ImGui.TextUnformatted("Output device");

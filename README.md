@@ -115,6 +115,21 @@ with `pwsh ./scripts/generate-repo.ps1`.
 3. Leave **"Mute the game's own BGM while active"** on.
 4. Adjust volume / crossfade to taste.
 
+### Commands
+| Command | What it does |
+| --- | --- |
+| `/bgmsep` | Opens the settings window. |
+| `/bgmsep toggle` | Flips the separated output on/off. |
+| `/bgmsep on` / `/bgmsep off` | Forces it on or off. |
+| `/bgmsep diag` | Starts/stops local BGM state recording. |
+
+**Binding a key to the toggle:** FFXIV can't bind plugin commands directly, so make a macro
+containing `/bgmsep toggle`, drag it onto a hotbar slot, and bind that slot. Handy for
+swapping back to the game's own BGM mid-fight (e.g. a final phase) without opening the menu.
+
+Turning it **off** stops the separate output *and* restores the game's BGM mute to whatever
+you had before, so the music comes back through your normal desktop audio immediately.
+
 ## OBS routing
 1. Add an **Audio Input Capture** (or Application Audio Capture) source for your virtual
    cable → call it `XIV BGM`.

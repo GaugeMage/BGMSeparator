@@ -100,6 +100,37 @@ public sealed class BgmPlaybackCoordinator : IDisposable
 
     public void ApplyMuteSettingChange() => MuteGameBgm(_config.MuteInGameBgm);
 
+    /// <summary>True while the separated output is enabled.</summary>
+    public bool IsEnabled => _config.Enabled;
+
+    /// <summary>
+    /// Turns the separated output on or off, persisting the choice. This is the single
+    /// path used by both the config window and the /bgmsep command so they can't drift.
+    /// Returns the state actually in effect afterwards.
+    /// </summary>
+    public bool SetEnabled(bool enabled)
+    {
+        if (_config.Enabled == enabled) return enabled;
+
+        _config.Enabled = enabled;
+        _config.Save();
+
+        try
+        {
+            if (enabled) Start();
+            else Stop();
+        }
+        catch (Exception ex)
+        {
+            Services.Log.Error(ex, $"[BgmSeparator] Failed to turn separated output {(enabled ? "on" : "off")}");
+        }
+
+        return _config.Enabled;
+    }
+
+    /// <summary>Flips the separated output. Returns the new state.</summary>
+    public bool ToggleEnabled() => SetEnabled(!_config.Enabled);
+
     private void OnSongChanged(int oldSong, int newSong)
     {
         if (!_config.Enabled) return;
