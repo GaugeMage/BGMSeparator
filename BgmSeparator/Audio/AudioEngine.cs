@@ -21,6 +21,7 @@ public sealed class AudioEngine : IDisposable
     private readonly object _lock = new();
     private MixingSampleProvider _mixer;
     private WasapiOut? _output;
+    private MMDevice? _device;
     private string _currentDeviceId = string.Empty;
 
     public AudioEngine()
@@ -48,35 +49,34 @@ public sealed class AudioEngine : IDisposable
             StopInternal();
 
             using var enumerator = new MMDeviceEnumerator();
-            MMDevice device;
-            if (string.IsNullOrEmpty(deviceId))
+            try
             {
-                device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-            }
-            else
-            {
-                try
-                {
-                    device = enumerator.GetDevice(deviceId);
-                }
-                catch
-                {
-                    Services.Log.Warning("[BgmSeparator] Saved audio device not found; using default.");
-                    device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-                }
-            }
+                _device = string.IsNullOrEmpty(deviceId)
+                    ? enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia)
+                    : enumerator.GetDevice(deviceId);
 
-            _output = new WasapiOut(device, AudioClientShareMode.Shared, useEventSync: true, latency: 150);
-            _output.Init(_mixer);
-            _output.Play();
-            _currentDeviceId = deviceId;
-            Services.Log.Info($"[BgmSeparator] Audio output started on '{device.FriendlyName}'.");
+                if (_device.State != DeviceState.Active)
+                    throw new InvalidOperationException($"Output device '{_device.FriendlyName}' is {_device.State}. Reconnect it or select an available output in /bgmsep.");
+
+                _output = new WasapiOut(_device, AudioClientShareMode.Shared, useEventSync: true, latency: 150);
+                _output.Init(_mixer);
+                _output.Play();
+                _currentDeviceId = deviceId;
+                Services.Log.Info($"[BgmSeparator] Audio output started on '{_device.FriendlyName}'.");
+            }
+            catch
+            {
+                // A failed Init must not leave an output that EnsureDevice treats as usable.
+                // Keep the chosen routing: falling back to desktop audio could leak BGM.
+                StopInternal();
+                throw;
+            }
         }
     }
 
     public void EnsureDevice(string deviceId)
     {
-        if (_output == null || _currentDeviceId != deviceId)
+        if (_output == null || _output.PlaybackState != PlaybackState.Playing || _currentDeviceId != deviceId)
             Start(deviceId);
     }
 
@@ -107,20 +107,35 @@ public sealed class AudioEngine : IDisposable
 
     private void StopInternal()
     {
-        if (_output != null)
+        var output = _output;
+        _output = null;
+        _currentDeviceId = string.Empty;
+        try
         {
-            try { _output.Stop(); } catch { }
-            _output.Dispose();
-            _output = null;
+            if (output != null)
+            {
+                try { output.Stop(); } catch { }
+                output.Dispose();
+            }
+        }
+        finally
+        {
+            _device?.Dispose();
+            _device = null;
+        }
+    }
+
+    public void Stop()
+    {
+        lock (_lock)
+        {
+            try { StopInternal(); }
+            finally { _mixer.RemoveAllMixerInputs(); }
         }
     }
 
     public void Dispose()
     {
-        lock (_lock)
-        {
-            StopInternal();
-            _mixer.RemoveAllMixerInputs();
-        }
+        Stop();
     }
 }

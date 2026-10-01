@@ -93,6 +93,13 @@ from your local Dalamud install (`%AppData%\XIVLauncher\addon\Hooks\dev`). The R
 produces `BgmSeparator/bin/x64/Release/BgmSeparator/latest.zip` plus a manifest, and a loose
 build you can point a Dalamud dev-plugin path at.
 
+Run the command and playback-state regression checks (no game required):
+```
+dotnet run --project tests/BgmSeparator.Tests -c Release
+```
+These compile the production parser and coordinator against stand-ins for the game and
+audio device. Actual WASAPI playback and hotbar input still need an in-game smoke test.
+
 ## Releasing (for the maintainer)
 Releases are automated by [`.github/workflows/release.yml`](.github/workflows/release.yml).
 To cut a release:
@@ -113,7 +120,7 @@ with `pwsh ./scripts/generate-repo.ps1`.
 1. `/bgmsep` to open settings.
 2. Pick your **Output device** (your virtual cable).
 3. Leave **"Mute the game's own BGM while active"** on.
-4. Adjust volume / crossfade to taste.
+4. Adjust volume to taste.
 
 ### Commands
 | Command | What it does |
@@ -121,14 +128,33 @@ with `pwsh ./scripts/generate-repo.ps1`.
 | `/bgmsep` | Opens the settings window. |
 | `/bgmsep toggle` | Flips the separated output on/off. |
 | `/bgmsep on` / `/bgmsep off` | Forces it on or off. |
+| `/bgmsep enable` / `/bgmsep disable` | Aliases for on/off. |
+| `/bgmsep help` | Shows command and keybind help. |
 | `/bgmsep diag` | Starts/stops local BGM state recording. |
 
-**Binding a key to the toggle:** FFXIV can't bind plugin commands directly, so make a macro
-containing `/bgmsep toggle`, drag it onto a hotbar slot, and bind that slot. Handy for
-swapping back to the game's own BGM mid-fight (e.g. a final phase) without opening the menu.
+FFXIV already uses [`/bgm`](https://na.finalfantasyxiv.com/lodestone/playguide/db/text_command/85db360715b/)
+for its own music volume/mute, so this plugin uses `/bgmsep` to avoid a conflict.
+
+**Binding a key to the toggle:**
+1. Open **System → User Macros** and select an empty macro.
+2. Name it **Toggle BGM Separator** and enter this line:
+   ```
+   /bgmsep toggle
+   ```
+3. Drag the macro onto a hotbar slot.
+4. Open **System → Keybind → Hotbar** and assign a key to that slot.
+
+Press the key to swap between separated output and the game's normal BGM routing without
+opening the settings window. The same command works when typed in chat.
 
 Turning it **off** stops the separate output *and* restores the game's BGM mute to whatever
-you had before, so the music comes back through your normal desktop audio immediately.
+you had before. If BGM was already muted before enabling the plugin, it stays muted.
+
+If your chosen output is unplugged or unavailable, the plugin stays off and shows an error
+instead of reporting a successful enable or silently routing music to another device.
+Reconnect the device, or open `/bgmsep`, click **Refresh**, and select an available output.
+Then run `/bgmsep on` (or use your toggle macro) to retry. Changing device or mute settings
+while the plugin is off does not start playback or mute the game's music.
 
 ## OBS routing
 1. Add an **Audio Input Capture** (or Application Audio Capture) source for your virtual

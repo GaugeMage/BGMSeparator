@@ -33,10 +33,12 @@ public sealed class ConfigWindow : Window, IDisposable
 
     public override void Draw()
     {
-        var enabled = _config.Enabled;
+        var enabled = _coordinator.IsEnabled;
         if (ImGui.Checkbox("Enable separated BGM output", ref enabled))
             _coordinator.SetEnabled(enabled);
-        ImGui.TextDisabled("Keybind it: make a macro with \"/bgmsep toggle\" and drag it to a hotbar.");
+        ImGui.TextWrapped("Command: /bgmsep toggle (or on/off). For a keybind, put /bgmsep toggle in a macro, drag it to a hotbar, and bind that slot.");
+        if (_coordinator.LastError != null)
+            ImGui.TextWrapped(_coordinator.LastError);
 
         ImGui.Separator();
         ImGui.TextUnformatted("Output device");
@@ -121,7 +123,9 @@ public sealed class ConfigWindow : Window, IDisposable
 
         var matched = effectiveGame == pluginSong;
         var col = matched ? new Vector4(0.4f, 1f, 0.4f, 1f) : new Vector4(1f, 0.8f, 0.3f, 1f);
-        ImGui.TextColored(col, $"Plugin playing: {(pluginSong == 0 ? "(silence)" : pluginSong.ToString())}{(matched ? "  (in sync)" : "  (transitioning)")}");
+        ImGui.TextColored(col, !_coordinator.IsEnabled
+            ? "Plugin playing: (disabled)"
+            : $"Plugin playing: {(pluginSong == 0 ? "(silence)" : pluginSong.ToString())}{(matched ? "  (in sync)" : "  (transitioning)")}");
 
         ImGui.Separator();
         ImGui.TextUnformatted("Diagnostics (optional, local only)");

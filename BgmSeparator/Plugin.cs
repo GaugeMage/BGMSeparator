@@ -1,4 +1,3 @@
-using System;
 using BgmSeparator.Audio;
 using BgmSeparator.Diagnostics;
 using BgmSeparator.Windows;
@@ -43,49 +42,62 @@ public sealed class Plugin : IDalamudPlugin
 
         if (_config.Enabled)
         {
-            try { _coordinator.Start(); }
-            catch (Exception ex) { Services.Log.Error(ex, "[BgmSeparator] Failed to start on load"); }
+            _coordinator.SetEnabled(true);
+            if (_coordinator.LastError != null)
+                Services.ChatGui.PrintError($"[BGM Separator] {_coordinator.LastError}");
         }
     }
 
     private void OnCommand(string command, string args)
     {
-        var arg = args.Trim().ToLowerInvariant();
-
-        switch (arg)
+        switch (BgmCommandParser.Parse(args))
         {
-            case "toggle":
+            case BgmCommand.Toggle:
                 ReportEnabled(_coordinator.ToggleEnabled());
                 return;
 
-            case "on":
-            case "enable":
+            case BgmCommand.Enable:
                 ReportEnabled(_coordinator.SetEnabled(true));
                 return;
 
-            case "off":
-            case "disable":
+            case BgmCommand.Disable:
                 ReportEnabled(_coordinator.SetEnabled(false));
                 return;
+            case BgmCommand.Settings:
+                OpenConfig();
+                return;
+            case BgmCommand.DiagnosticsToggle:
+                ToggleDiagnostics(!_diagnostics.IsRecording);
+                return;
+            case BgmCommand.DiagnosticsOn:
+                ToggleDiagnostics(true);
+                return;
+            case BgmCommand.DiagnosticsOff:
+                ToggleDiagnostics(false);
+                return;
+            default:
+                Services.ChatGui.Print("[BGM Separator] /bgmsep opens settings; /bgmsep toggle, on, or off controls separated output. Put /bgmsep toggle in a hotbar macro to bind a key. /bgmsep diag [on|off] controls local recording.");
+                return;
         }
+    }
 
-        if (arg.StartsWith("diag"))
+    private void ReportEnabled(bool enabled)
+    {
+        if (_coordinator.LastError != null)
         {
-            ToggleDiagnostics(arg);
+            Services.ChatGui.PrintError($"[BGM Separator] {_coordinator.LastError}");
             return;
         }
 
-        OpenConfig();
+        Services.ChatGui.Print(enabled
+            ? _config.MuteInGameBgm
+                ? "[BGM Separator] Separated BGM output on (game BGM muted)."
+                : "[BGM Separator] Separated BGM output on (game BGM unchanged)."
+            : "[BGM Separator] Separated BGM output off (previous game BGM setting restored).");
     }
 
-    private static void ReportEnabled(bool enabled) => Services.ChatGui.Print(
-        enabled
-            ? "[BGM Separator] Separated BGM output on (game BGM muted)."
-            : "[BGM Separator] Separated BGM output off (game BGM restored).");
-
-    private void ToggleDiagnostics(string arg)
+    private void ToggleDiagnostics(bool wantOn)
     {
-        var wantOn = arg.EndsWith("on") || (!arg.EndsWith("off") && !_diagnostics.IsRecording);
         if (wantOn)
         {
             var path = _diagnostics.Start(() => _coordinator.CurrentTrackId);
