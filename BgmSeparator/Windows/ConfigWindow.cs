@@ -5,26 +5,29 @@ using System.IO;
 using System.Numerics;
 using BgmSeparator.Audio;
 using BgmSeparator.Diagnostics;
+using BgmSeparator.Input;
 using Dalamud.Interface.Windowing;
 using Dalamud.Bindings.ImGui;
 
 namespace BgmSeparator.Windows;
 
-public sealed class ConfigWindow : Window, IDisposable
+internal sealed class ConfigWindow : Window, IDisposable
 {
     private readonly Configuration _config;
     private readonly BgmPlaybackCoordinator _coordinator;
     private readonly BgmDiagnostics _diagnostics;
+    private readonly HotkeyProcessor _hotkeys;
 
     private List<AudioDeviceInfo> _devices = new();
 
-    public ConfigWindow(Configuration config, BgmPlaybackCoordinator coordinator, BgmDiagnostics diagnostics)
+    public ConfigWindow(Configuration config, BgmPlaybackCoordinator coordinator, BgmDiagnostics diagnostics, HotkeyProcessor hotkeys)
         : base("BGM Separator###BgmSeparatorConfig")
     {
         _config = config;
         _coordinator = coordinator;
         _diagnostics = diagnostics;
-        Size = new Vector2(460, 420);
+        _hotkeys = hotkeys;
+        Size = new Vector2(520, 620);
         SizeCondition = ImGuiCond.FirstUseEver;
         RefreshDevices();
     }
@@ -36,9 +39,11 @@ public sealed class ConfigWindow : Window, IDisposable
         var enabled = _coordinator.IsEnabled;
         if (ImGui.Checkbox("Enable separated BGM output", ref enabled))
             _coordinator.SetEnabled(enabled);
-        ImGui.TextWrapped("Command: /bgmsep toggle (or on/off). For a keybind, put /bgmsep toggle in a macro, drag it to a hotbar, and bind that slot.");
+        ImGui.TextWrapped("Commands: /bgmseptoggle, /bgmsepon, /bgmsepoff");
         if (_coordinator.LastError != null)
             ImGui.TextWrapped(_coordinator.LastError);
+
+        DrawHotkeys();
 
         ImGui.Separator();
         ImGui.TextUnformatted("Output device");
@@ -102,6 +107,34 @@ public sealed class ConfigWindow : Window, IDisposable
 
         DrawDiagnostics();
     }
+
+    private void DrawHotkeys()
+    {
+        ImGui.Separator();
+        ImGui.TextUnformatted("Keybinds");
+        foreach (var action in Enum.GetValues<HotkeyAction>())
+        {
+            ImGui.PushID(action.ToString());
+            ImGui.TextUnformatted(action.ToString());
+            ImGui.SameLine(80);
+            var capturing = _hotkeys.Capturing == action;
+            if (ImGui.Button(capturing ? "Press a key..." : HotkeyController.Display(_hotkeys.GetBinding(action)), new Vector2(220, 0)))
+                _hotkeys.BeginCapture(action);
+            ImGui.SameLine();
+            if (ImGui.SmallButton("Clear")) _hotkeys.SetBinding(action, new HotkeyBinding());
+            ImGui.PopID();
+        }
+        if (_hotkeys.Capturing != null)
+        {
+            ImGui.TextWrapped("Press your shortcut, optionally holding Ctrl, Alt, or Shift. Escape cancels.");
+            if (ImGui.Button("Cancel binding")) _hotkeys.CancelCapture();
+        }
+        if (_hotkeys.CaptureError != null) ImGui.TextWrapped(_hotkeys.CaptureError);
+        ImGui.TextWrapped("Click a binding to change it. Shortcuts work while FFXIV is focused and you are not typing. Choose keys not already used by your game controls.");
+        RespectCloseHotkey = _hotkeys.Capturing == null;
+    }
+
+    public override void OnClose() => _hotkeys.CancelCapture();
 
     private void DrawDiagnostics()
     {

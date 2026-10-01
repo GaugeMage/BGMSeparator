@@ -16,6 +16,19 @@ internal enum BgmCommand
 
 internal static class BgmCommandParser
 {
+    public static BgmCommand Parse(string command, string args)
+    {
+        if (command.Equals("/bgmsep", StringComparison.OrdinalIgnoreCase)) return Parse(args);
+        if (!string.IsNullOrWhiteSpace(args)) return BgmCommand.Help;
+        return command.ToLowerInvariant() switch
+        {
+            "/bgmseptoggle" => BgmCommand.Toggle,
+            "/bgmsepon" => BgmCommand.Enable,
+            "/bgmsepoff" => BgmCommand.Disable,
+            _ => BgmCommand.Help,
+        };
+    }
+
     public static BgmCommand Parse(string args)
     {
         var words = args.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);

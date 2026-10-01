@@ -154,7 +154,7 @@ public sealed class BgmPlaybackCoordinator : IDisposable
 
     private void HandleFailure(Exception ex)
     {
-        LastError = $"Separated output is off. {ex.Message} Check the output device in /bgmsep, then try /bgmsep on.";
+        LastError = $"Separated output is off. {ex.Message} Check the output device in /bgmsep, then try /bgmsepon.";
         Services.Log.Error(ex, "[BgmSeparator] Could not apply audio settings");
         try { Stop(); }
         catch (Exception cleanupError)

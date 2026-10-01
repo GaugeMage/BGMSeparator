@@ -1,5 +1,6 @@
 using System;
 using Dalamud.Configuration;
+using BgmSeparator.Input;
 
 namespace BgmSeparator;
 
@@ -35,6 +36,10 @@ public class Configuration : IPluginConfiguration
     /// or play once (like a fanfare) when false.
     /// </summary>
     public bool LoopUntaggedTracks { get; set; } = true;
+
+    public HotkeyBinding ToggleHotkey { get; set; } = new();
+    public HotkeyBinding OnHotkey { get; set; } = new();
+    public HotkeyBinding OffHotkey { get; set; } = new();
 
     public void Save() => Services.PluginInterface.SavePluginConfig(this);
 }

@@ -8,6 +8,8 @@
   <ItemGroup>
     <Compile Include="../../BgmSeparator/BgmCommandParser.cs" Link="BgmCommandParser.cs" />
     <Compile Include="../../BgmSeparator/Configuration.cs" Link="Configuration.cs" />
+    <Compile Include="../../BgmSeparator/Input/HotkeyBinding.cs" Link="HotkeyBinding.cs" />
+    <Compile Include="../../BgmSeparator/Input/HotkeyProcessor.cs" Link="HotkeyProcessor.cs" />
     <Compile Include="../../BgmSeparator/Audio/BgmPlaybackCoordinator.cs" Link="BgmPlaybackCoordinator.cs" />
   </ItemGroup>
 </Project>

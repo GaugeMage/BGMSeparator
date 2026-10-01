@@ -93,12 +93,13 @@ from your local Dalamud install (`%AppData%\XIVLauncher\addon\Hooks\dev`). The R
 produces `BgmSeparator/bin/x64/Release/BgmSeparator/latest.zip` plus a manifest, and a loose
 build you can point a Dalamud dev-plugin path at.
 
-Run the command and playback-state regression checks (no game required):
+Run the command, hotkey, and playback-state regression checks (no game required):
 ```
 dotnet run --project tests/BgmSeparator.Tests -c Release
 ```
-These compile the production parser and coordinator against stand-ins for the game and
-audio device. Actual WASAPI playback and hotbar input still need an in-game smoke test.
+These compile the production parser, hotkey processor, and coordinator against stand-ins
+for the game and audio device. Actual WASAPI playback and keyboard capture still need an
+in-game smoke test.
 
 ## Releasing (for the maintainer)
 Releases are automated by [`.github/workflows/release.yml`](.github/workflows/release.yml).
@@ -126,26 +127,32 @@ with `pwsh ./scripts/generate-repo.ps1`.
 | Command | What it does |
 | --- | --- |
 | `/bgmsep` | Opens the settings window. |
-| `/bgmsep toggle` | Flips the separated output on/off. |
-| `/bgmsep on` / `/bgmsep off` | Forces it on or off. |
-| `/bgmsep enable` / `/bgmsep disable` | Aliases for on/off. |
+| `/bgmseptoggle` | Flips the separated output on/off. |
+| `/bgmsepon` | Enables separated output. |
+| `/bgmsepoff` | Disables separated output and restores the previous game BGM setting. |
 | `/bgmsep help` | Shows command and keybind help. |
 | `/bgmsep diag` | Starts/stops local BGM state recording. |
 
 FFXIV already uses [`/bgm`](https://na.finalfantasyxiv.com/lodestone/playguide/db/text_command/85db360715b/)
 for its own music volume/mute, so this plugin uses `/bgmsep` to avoid a conflict.
 
-**Binding a key to the toggle:**
-1. Open **System → User Macros** and select an empty macro.
-2. Name it **Toggle BGM Separator** and enter this line:
-   ```
-   /bgmsep toggle
-   ```
-3. Drag the macro onto a hotbar slot.
-4. Open **System → Keybind → Hotbar** and assign a key to that slot.
+The older `/bgmsep toggle`, `/bgmsep on`, and `/bgmsep off` commands remain supported for
+existing users.
 
-Press the key to swap between separated output and the game's normal BGM routing without
-opening the settings window. The same command works when typed in chat.
+### Built-in keybinds
+1. Open `/bgmsep` and find **Keybinds**.
+2. Click **Not set** (or the current binding) beside **Toggle**, **On**, or **Off**.
+3. Press your chosen key, optionally holding **Ctrl**, **Alt**, and/or **Shift**.
+4. Close the settings window and use the shortcut. Bindings save automatically.
+
+Each action has its own optional binding; no macro or hotbar slot is needed. **Clear** removes
+a binding, and **Escape** cancels assignment. The plugin rejects duplicate combinations
+between its actions. Choose shortcuts not already used by your game controls, since these
+bindings do not replace FFXIV's own keybinds.
+
+Shortcuts only act while FFXIV is focused, and pause while typing in chat/text fields or
+interacting with plugin keyboard controls. Holding a key performs the action once; release
+it before pressing again. Keys used while assigning a binding do not trigger BGM actions.
 
 Turning it **off** stops the separate output *and* restores the game's BGM mute to whatever
 you had before. If BGM was already muted before enabling the plugin, it stays muted.
@@ -153,7 +160,7 @@ you had before. If BGM was already muted before enabling the plugin, it stays mu
 If your chosen output is unplugged or unavailable, the plugin stays off and shows an error
 instead of reporting a successful enable or silently routing music to another device.
 Reconnect the device, or open `/bgmsep`, click **Refresh**, and select an available output.
-Then run `/bgmsep on` (or use your toggle macro) to retry. Changing device or mute settings
+Then run `/bgmsepon` (or use your Toggle/On keybind) to retry. Changing device or mute settings
 while the plugin is off does not start playback or mute the game's music.
 
 ## OBS routing
