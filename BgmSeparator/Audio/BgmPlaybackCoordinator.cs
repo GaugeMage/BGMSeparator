@@ -24,7 +24,7 @@ public sealed class BgmPlaybackCoordinator : IDisposable
 
     private sealed class Track : IDisposable
     {
-        public required VorbisLoopSampleProvider Source;
+        public required IDisposable Source;
         public required FadeSampleProvider Fade;
         public int SceneIndex = -1;
         public void Dispose() => Source.Dispose();
@@ -190,8 +190,8 @@ public sealed class BgmPlaybackCoordinator : IDisposable
         // Decode off the framework thread to avoid frame hitches.
         Task.Run(() =>
         {
-            var ogg = ScdBgmLoader.LoadOgg(newSong);
-            if (ogg == null)
+            var audio = ScdBgmLoader.LoadTrack(newSong);
+            if (audio == null)
             {
                 // The game switched to a BGM with no playable file (e.g. a cutscene or
                 // placeholder like row 1). Match the game and go silent instead of looping
@@ -205,10 +205,30 @@ public sealed class BgmPlaybackCoordinator : IDisposable
 
             try
             {
-                var src = new VorbisLoopSampleProvider(ogg, _config.LoopUntaggedTracks);
-                ISampleProvider chain = src;
+                // Nearly all BGM is Ogg Vorbis. Gridania's town themes are CRI HCA instead,
+                // which used to be skipped and left the separated output silent there.
+                IDisposable src;
+                ISampleProvider chain;
+                if (audio.Format == ScdAudioFormat.Hca)
+                {
+                    var hca = new HcaLoopSampleProvider(audio.Data, _config.LoopUntaggedTracks);
+                    src = hca;
+                    chain = hca;
+                }
+                else
+                {
+                    var vorbis = new VorbisLoopSampleProvider(audio.Data, _config.LoopUntaggedTracks);
+                    src = vorbis;
+                    chain = vorbis;
+                }
+
                 if (chain.WaveFormat.Channels == 1)
                     chain = new MonoToStereoSampleProvider(chain);
+                else if (chain.WaveFormat.Channels > 2)
+                    // Layered track (several stereo pairs in one stream). The stereo mixer
+                    // rejects it outright, which used to leave the whole song silent - e.g.
+                    // all of TEA phase 3. Play the track's normal layer.
+                    chain = new StereoLayerSampleProvider(chain);
                 if (chain.WaveFormat.SampleRate != AudioEngine.MixFormat.SampleRate)
                     chain = new WdlResamplingSampleProvider(chain, AudioEngine.MixFormat.SampleRate);
 

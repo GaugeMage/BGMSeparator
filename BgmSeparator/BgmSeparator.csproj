@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>0.4.2.0</Version>
+    <Version>0.4.3.0</Version>
     <AssemblyName>BgmSeparator</AssemblyName>
     <RootNamespace>BgmSeparator</RootNamespace>
     <!-- Produces bin/x64/Release/BgmSeparator/latest.zip on Release build -->
@@ -21,6 +21,8 @@
   <ItemGroup>
     <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="NVorbis" Version="0.10.5" />
+    <!-- CRI HCA decoder (managed, MIT) for the few music files stored as SCD format 26. -->
+    <PackageReference Include="VGAudio" Version="2.2.1" />
   </ItemGroup>
 
 </Project>

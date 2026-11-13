@@ -4,7 +4,8 @@ using System.IO;
 namespace BgmSeparator.Audio;
 
 /// <summary>
-/// Extracts the Ogg Vorbis stream from a raw FFXIV .scd file.
+/// Extracts the Ogg Vorbis stream (or, for the few files that use it, the HCA stream) from
+/// a raw FFXIV .scd file.
 ///
 /// This reimplements Lumina's <c>ScdFile.GetAudio()</c> because the version of Lumina
 /// bundled with Dalamud still has the known "Source array was not long enough" bug
@@ -19,6 +20,7 @@ public static class ScdOggExtractor
     private const int OggSeekHeaderSize = 32;
     private const uint MarkerChunkFlag = 0x01;
     private const int AudioFormatOggVorbis = 6;
+    private const int AudioFormatHca = 26;
 
     // Descramble table used for scd version 3 Ogg headers (from FFXIV Explorer / Lumina).
     private static readonly byte[] OggXorTable =
@@ -127,4 +129,105 @@ public static class ScdOggExtractor
 
         return ogg;
     }
+
+    /// <summary>
+    /// Returns audio entry 0 as a standard .hca file image (the stored HCA header followed
+    /// by descrambled frames), or null if the entry is not SCD format 26.
+    ///
+    /// A few music files (Gridania's town themes) store CRI HCA instead of Ogg Vorbis. The
+    /// entry's extra data is a 0x18-byte block (byte 1 = its own size, bytes 2-3 = HCA header
+    /// size) followed by the HCA header in the clear. The frames after the header are XORed
+    /// with the same table and key bytes as a version 3 Ogg, with the key position counted
+    /// from the start of the HCA header. Layout as parsed by vgmstream (sqex_scd.c, 0x1A).
+    /// </summary>
+    public static byte[]? ExtractHca(byte[] scd)
+    {
+        using var ms = new MemoryStream(scd, writable: false);
+        using var r = new BinaryReader(ms);
+
+        ms.Position = BinaryHeaderSize;
+        r.ReadUInt16();                        // SoundCount
+        r.ReadUInt16();                        // TrackCount
+        var audioCount = r.ReadUInt16();       // AudioCount
+        r.ReadUInt16();                        // Number
+        r.ReadUInt32();                        // TrackOffset
+        var audioOffset = r.ReadUInt32();      // AudioOffset
+
+        if (audioCount == 0) return null;
+
+        ms.Position = audioOffset;
+        var firstAudioOffset = r.ReadUInt32();
+
+        // AudioBasicDesc. LoopStart/LoopEnd here are HCA block indices; the HCA header's own
+        // loop chunk carries the same blocks plus sample-exact trims, so playback reads that.
+        ms.Position = firstAudioOffset;
+        var size = r.ReadUInt32();
+        r.ReadUInt32();                        // Channel
+        r.ReadUInt32();                        // Rate
+        var format = (int)r.ReadUInt32();      // Format
+        r.ReadUInt32();                        // LoopStart
+        r.ReadUInt32();                        // LoopEnd
+        r.ReadUInt32();                        // SubInfoSize
+        var flags = r.ReadUInt32();
+
+        if (format != AudioFormatHca) return null;
+
+        long extraPos = firstAudioOffset + AudioBasicDescSize;
+        if ((flags & MarkerChunkFlag) != 0)
+        {
+            r.ReadUInt32();                    // chunk id
+            extraPos += r.ReadUInt32();        // chunk size
+            ms.Position = extraPos;
+        }
+
+        r.ReadByte();                          // Version
+        var extraSize = r.ReadByte();          // size of this block; the HCA header follows it
+        var headerSize = r.ReadUInt16();
+
+        long hcaPos = extraPos + extraSize;
+        if (headerSize < 8 || hcaPos + headerSize + size > scd.Length) return null;
+
+        // "HCA\0", tolerating the high-bit masking CRI applies to chunk names.
+        if ((scd[hcaPos] & 0x7F) != 'H' || (scd[hcaPos + 1] & 0x7F) != 'C' || (scd[hcaPos + 2] & 0x7F) != 'A')
+            return null;
+
+        var hca = new byte[headerSize + size];
+        Array.Copy(scd, hcaPos, hca, 0, hca.Length);
+
+        XorHcaFrames(hca.AsSpan(headerSize), headerSize);
+        return hca;
+    }
+
+    /// <summary>
+    /// XORs HCA frame data in place. <paramref name="frames"/> must be the entry's whole
+    /// stream, because its length picks the key. The same call scrambles and descrambles.
+    /// </summary>
+    internal static void XorHcaFrames(Span<byte> frames, int headerSize)
+    {
+        var xor = (byte)(frames.Length & 0x7F);
+        var keyStart = (frames.Length & 0x3F) + headerSize;
+        for (var j = 0; j < frames.Length; j++)
+            frames[j] ^= (byte)(OggXorTable[(keyStart + j) & 0xFF] ^ xor);
+    }
+
+    /// <summary>
+    /// Returns the playable stream of audio entry 0 with its codec, or null when the entry
+    /// is empty or in a format the plugin cannot decode.
+    /// </summary>
+    public static ScdAudio? ExtractAudio(byte[] scd)
+    {
+        if (Extract(scd) is { } ogg) return new ScdAudio(ScdAudioFormat.OggVorbis, ogg);
+        if (ExtractHca(scd) is { } hca) return new ScdAudio(ScdAudioFormat.Hca, hca);
+        return null;
+    }
 }
+
+/// <summary>Codecs the plugin can decode out of an .scd music file.</summary>
+public enum ScdAudioFormat
+{
+    OggVorbis,
+    Hca,
+}
+
+/// <summary>One extracted, descrambled audio stream: Ogg Vorbis bytes or a .hca file image.</summary>
+public sealed record ScdAudio(ScdAudioFormat Format, byte[] Data);

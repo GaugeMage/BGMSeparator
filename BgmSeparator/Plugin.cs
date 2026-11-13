@@ -4,6 +4,7 @@ using BgmSeparator.Input;
 using BgmSeparator.Windows;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Command;
+using Dalamud.Interface.ImGuiNotification;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
@@ -40,7 +41,7 @@ public sealed class Plugin : IDalamudPlugin
 
         Services.CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
-            HelpMessage = "Open settings and configure hotkeys. Use /bgmseptoggle, /bgmsepon, or /bgmsepoff. /bgmsep diag toggles BGM state recording.",
+            HelpMessage = "Open settings and configure hotkeys. Use /bgmseptoggle, /bgmsepon, or /bgmsepoff. /bgmsep diag [on|off] toggles BGM state recording.",
         });
         Services.CommandManager.AddHandler("/bgmseptoggle", new CommandInfo(OnCommand) { HelpMessage = "Toggle separated BGM output." });
         Services.CommandManager.AddHandler("/bgmsepon", new CommandInfo(OnCommand) { HelpMessage = "Enable separated BGM output." });
@@ -49,8 +50,7 @@ public sealed class Plugin : IDalamudPlugin
         if (_config.Enabled)
         {
             _coordinator.SetEnabled(true);
-            if (_coordinator.LastError != null)
-                Services.ChatGui.PrintError($"[BGM Separator] {_coordinator.LastError}");
+            ReportFailure();
         }
     }
 
@@ -64,15 +64,18 @@ public sealed class Plugin : IDalamudPlugin
         switch (command)
         {
             case BgmCommand.Toggle:
-                ReportEnabled(_coordinator.ToggleEnabled());
+                _coordinator.ToggleEnabled();
+                ReportFailure();
                 return;
 
             case BgmCommand.Enable:
-                ReportEnabled(_coordinator.SetEnabled(true));
+                _coordinator.SetEnabled(true);
+                ReportFailure();
                 return;
 
             case BgmCommand.Disable:
-                ReportEnabled(_coordinator.SetEnabled(false));
+                _coordinator.SetEnabled(false);
+                ReportFailure();
                 return;
             case BgmCommand.Settings:
                 OpenConfig();
@@ -87,24 +90,25 @@ public sealed class Plugin : IDalamudPlugin
                 ToggleDiagnostics(false);
                 return;
             default:
-                Services.ChatGui.Print("[BGM Separator] /bgmsep opens settings and hotkeys. /bgmseptoggle toggles output; /bgmsepon enables it; /bgmsepoff disables it. /bgmsep diag [on|off] controls local recording.");
+                // Help and unrecognised arguments: the settings window lists the commands
+                // and keybinds. The plugin never writes to the chat log.
+                OpenConfig();
                 return;
         }
     }
 
-    private void ReportEnabled(bool enabled)
+    // The plugin stays out of the chat log entirely, so a successful toggle is silent. A
+    // failed one must still be noticed - the game's music is back on the main output - so
+    // it raises a Dalamud notification. The settings window shows the same text.
+    private void ReportFailure()
     {
-        if (_coordinator.LastError != null)
+        if (_coordinator.LastError == null) return;
+        Services.Notifications.AddNotification(new Notification
         {
-            Services.ChatGui.PrintError($"[BGM Separator] {_coordinator.LastError}");
-            return;
-        }
-
-        Services.ChatGui.Print(enabled
-            ? _config.MuteInGameBgm
-                ? "[BGM Separator] Separated BGM output on (game BGM muted)."
-                : "[BGM Separator] Separated BGM output on (game BGM unchanged)."
-            : "[BGM Separator] Separated BGM output off (previous game BGM setting restored).");
+            Title = "BGM Separator",
+            Content = _coordinator.LastError,
+            Type = NotificationType.Error,
+        });
     }
 
     private void ToggleDiagnostics(bool wantOn)
@@ -113,14 +117,12 @@ public sealed class Plugin : IDalamudPlugin
         {
             var path = _diagnostics.Start(() => _coordinator.CurrentTrackId);
             Services.Log.Info($"[BgmSeparator] Recording BGM state to {path}");
-            Services.ChatGui.Print($"[BGM Separator] Recording BGM state (optional/local). Run \"/bgmsep diag off\" to stop. File: {path}");
         }
         else
         {
             var path = _diagnostics.CurrentPath;
             _diagnostics.Stop();
-            Services.Log.Info("[BgmSeparator] Stopped BGM state recording.");
-            Services.ChatGui.Print($"[BGM Separator] Stopped recording. Saved: {path}");
+            Services.Log.Info($"[BgmSeparator] Stopped BGM state recording. Saved: {path}");
         }
     }
 

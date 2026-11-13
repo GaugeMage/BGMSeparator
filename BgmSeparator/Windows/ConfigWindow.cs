@@ -39,7 +39,7 @@ internal sealed class ConfigWindow : Window, IDisposable
         var enabled = _coordinator.IsEnabled;
         if (ImGui.Checkbox("Enable separated BGM output", ref enabled))
             _coordinator.SetEnabled(enabled);
-        ImGui.TextWrapped("Commands: /bgmseptoggle, /bgmsepon, /bgmsepoff");
+        ImGui.TextWrapped("Commands: /bgmseptoggle, /bgmsepon, /bgmsepoff, /bgmsep diag [on|off]. They work silently; nothing is printed to chat.");
         if (_coordinator.LastError != null)
             ImGui.TextWrapped(_coordinator.LastError);
 

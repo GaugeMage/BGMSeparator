@@ -4,8 +4,9 @@ using LuminaBgm = Lumina.Excel.Sheets.BGM;
 namespace BgmSeparator.Audio;
 
 /// <summary>
-/// Maps a BGM sheet row id to the game's music file and returns the decoded
-/// (already XOR-descrambled) Ogg Vorbis bytes for playback.
+/// Maps a BGM sheet row id to the game's music file and returns its (already
+/// XOR-descrambled) audio stream for playback: Ogg Vorbis for nearly every track, CRI HCA
+/// for the few stored as SCD format 26.
 /// </summary>
 public static class ScdBgmLoader
 {
@@ -24,11 +25,11 @@ public static class ScdBgmLoader
     }
 
     /// <summary>
-    /// Returns the descrambled Ogg Vorbis bytes for a BGM row id, or null if it cannot
-    /// be resolved / is not an Ogg stream. We read the raw .scd and extract it ourselves
-    /// (see <see cref="ScdOggExtractor"/>) to avoid the buggy bundled Lumina GetAudio().
+    /// Returns the descrambled audio stream for a BGM row id, or null if it cannot be
+    /// resolved / is not in a format we can decode. We read the raw .scd and extract it
+    /// ourselves (see <see cref="ScdOggExtractor"/>) to avoid the buggy bundled Lumina GetAudio().
     /// </summary>
-    public static byte[]? LoadOgg(int songId)
+    public static ScdAudio? LoadTrack(int songId)
     {
         try
         {
@@ -38,17 +39,20 @@ public static class ScdBgmLoader
             var file = Services.DataManager.GetFile(path);
             if (file is null || file.Data is null || file.Data.Length < 64) return null;
 
-            var data = ScdOggExtractor.Extract(file.Data);
-            if (data is null || data.Length < 4) return null;
+            var audio = ScdOggExtractor.ExtractAudio(file.Data);
+            if (audio is null || audio.Data.Length < 4) return null;
 
-            // Sanity check: valid entries start with the "OggS" page signature.
-            if (!(data[0] == (byte)'O' && data[1] == (byte)'g' && data[2] == (byte)'g' && data[3] == (byte)'S'))
+            // Sanity check: valid Ogg entries start with the "OggS" page signature.
+            // (HCA entries are only returned once their "HCA" signature has been checked.)
+            var data = audio.Data;
+            if (audio.Format == ScdAudioFormat.OggVorbis
+                && !(data[0] == (byte)'O' && data[1] == (byte)'g' && data[2] == (byte)'g' && data[3] == (byte)'S'))
             {
                 Services.Log.Warning($"[BgmSeparator] BGM {songId} ({path}) did not decode to Ogg Vorbis; skipping.");
                 return null;
             }
 
-            return data;
+            return audio;
         }
         catch (Exception ex)
         {

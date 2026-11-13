@@ -25,7 +25,9 @@ plugin **reproduces the BGM itself**:
    it never overwrites the game's music.
 2. **Decodes the game's own music file.** Each BGM id maps to a `.scd` file in the game data
    (`music/...`). Those contain Ogg Vorbis, which Lumina (shipped with Dalamud) decodes,
-   including the `LOOPSTART` / `LOOPEND` loop points.
+   including the `LOOPSTART` / `LOOPEND` loop points. A couple of tracks (Gridania's town
+   themes) are stored as CRI HCA instead and are decoded with VGAudio, looping at the points
+   in the HCA header.
 3. **Plays it out on a device you choose** (e.g. a virtual audio cable) via WASAPI, looping
    the same way the game does, with a short crossfade on song changes.
 4. **Mutes the game's own BGM** (`IsSndBgm`) while active, so the game's normal output — the
@@ -39,7 +41,12 @@ Net result in OBS: your **Desktop Audio** source has game SFX/voice but no music
 - **It is not a tap of the game's real audio mix.** It's a parallel, sample-accurate copy
   of the same track. For 95% of BGM (zones, most fights) this is indistinguishable. Where it
   can drift from the game:
-  - dynamically **layered** combat music (some fights fade extra stems in/out),
+  - **layered** music. About twenty tracks are 4- or 6-channel files holding several stereo
+    layers that the game switches between: "Rise" in A12 and The Epic of Alexander phase 3
+    (time-stop "Stasis Loop" on channels 3-4), and field/raid music with battle variants
+    (Eureka, Bozja, Occult Crescent, Crystal Tower, Coil, Diadem, PvP). The plugin plays
+    the track's main layer (channels 1-2) throughout; it does not follow the game's switch
+    to the other layers, so e.g. Rise keeps playing through a Temporal Stasis freeze.
   - abrupt in-engine **transitions / stingers** (victory fanfares, cutscene hits),
   - situational one-shots.
   The plugin reacts to song-id changes, but it can't perfectly mirror the game's internal
@@ -130,8 +137,12 @@ with `pwsh ./scripts/generate-repo.ps1`.
 | `/bgmseptoggle` | Flips the separated output on/off. |
 | `/bgmsepon` | Enables separated output. |
 | `/bgmsepoff` | Disables separated output and restores the previous game BGM setting. |
-| `/bgmsep help` | Shows command and keybind help. |
+| `/bgmsep help` | Opens the settings window, which lists the commands and keybinds. |
 | `/bgmsep diag` | Starts/stops local BGM state recording. |
+
+The plugin never prints to the chat log: toggling is silent. If turning it on fails (for
+example the output device is unplugged), a Dalamud error notification pops up and the same
+message is shown in the settings window.
 
 FFXIV already uses [`/bgm`](https://na.finalfantasyxiv.com/lodestone/playguide/db/text_command/85db360715b/)
 for its own music volume/mute, so this plugin uses `/bgmsep` to avoid a conflict.
@@ -157,8 +168,8 @@ it before pressing again. Keys used while assigning a binding do not trigger BGM
 Turning it **off** stops the separate output *and* restores the game's BGM mute to whatever
 you had before. If BGM was already muted before enabling the plugin, it stays muted.
 
-If your chosen output is unplugged or unavailable, the plugin stays off and shows an error
-instead of reporting a successful enable or silently routing music to another device.
+If your chosen output is unplugged or unavailable, the plugin stays off and raises an error
+notification instead of silently routing music to another device.
 Reconnect the device, or open `/bgmsep`, click **Refresh**, and select an available output.
 Then run `/bgmsepon` (or use your Toggle/On keybind) to retry. Changing device or mute settings
 while the plugin is off does not start playback or mute the game's music.
@@ -189,8 +200,10 @@ BgmSeparator/
     BgmWatcher.cs                  per-frame current-song detection + event
   Audio/
     ScdBgmLoader.cs                BGM id -> .scd path -> raw bytes
-    ScdOggExtractor.cs             SCD -> Ogg Vorbis (fixes the bundled-Lumina GetAudio bug)
+    ScdOggExtractor.cs             SCD -> Ogg Vorbis (fixes the bundled-Lumina GetAudio bug) or HCA
     VorbisLoopSampleProvider.cs    Ogg decode + LOOPSTART/LOOPEND looping
+    HcaLoopSampleProvider.cs       HCA decode (SCD format 26) + loop-chunk looping
+    StereoLayerSampleProvider.cs   layered 4/6-channel tracks -> the main stereo layer
     AudioEngine.cs                 WASAPI output + device list + mixer
     BgmPlaybackCoordinator.cs      song-change -> load -> crossfade; in-game mute
   Windows/
@@ -202,6 +215,8 @@ BgmSeparator/
   [Orchestrion](https://github.com/perchbirdd/OrchestrionPlugin).
 - SCD/Ogg struct layouts and the descramble table are from
   [Lumina](https://github.com/NotAdam/Lumina).
+- The SCD HCA layout (format 26) follows [vgmstream](https://github.com/vgmstream/vgmstream);
+  HCA decoding is done by [VGAudio](https://github.com/Thealexbarney/VGAudio) (MIT).
 
 ## License
 MIT — see [LICENSE](LICENSE).

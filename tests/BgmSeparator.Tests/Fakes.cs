@@ -34,22 +34,29 @@ namespace BgmSeparator
 }
 namespace NAudio.Wave
 {
-    public sealed class WaveFormat
+    public sealed class WaveFormat(int sampleRate = 48000, int channels = 2)
     {
-        public int Channels => 2;
-        public int SampleRate => 48000;
+        public int Channels => channels;
+        public int SampleRate => sampleRate;
+        public static WaveFormat CreateIeeeFloatWaveFormat(int sampleRate, int channels) => new(sampleRate, channels);
     }
-    public interface ISampleProvider { WaveFormat WaveFormat { get; } }
+    public interface ISampleProvider
+    {
+        WaveFormat WaveFormat { get; }
+        int Read(float[] buffer, int offset, int count);
+    }
 }
 namespace NAudio.Wave.SampleProviders
 {
     public sealed class MonoToStereoSampleProvider(NAudio.Wave.ISampleProvider source) : NAudio.Wave.ISampleProvider
     {
-        public NAudio.Wave.WaveFormat WaveFormat => source.WaveFormat;
+        public NAudio.Wave.WaveFormat WaveFormat { get; } = new(source.WaveFormat.SampleRate, 2);
+        public int Read(float[] buffer, int offset, int count) => 0;
     }
     public sealed class WdlResamplingSampleProvider(NAudio.Wave.ISampleProvider source, int rate) : NAudio.Wave.ISampleProvider
     {
-        public NAudio.Wave.WaveFormat WaveFormat { get; } = rate > 0 ? source.WaveFormat : throw new ArgumentOutOfRangeException(nameof(rate));
+        public NAudio.Wave.WaveFormat WaveFormat { get; } = rate > 0 ? new(rate, source.WaveFormat.Channels) : throw new ArgumentOutOfRangeException(nameof(rate));
+        public int Read(float[] buffer, int offset, int count) => 0;
     }
 }
 namespace BgmSeparator.Bgm
@@ -81,6 +88,7 @@ namespace BgmSeparator.Audio
         public bool Running;
         public int Starts;
         public int Inputs;
+        public NAudio.Wave.ISampleProvider? LastInput;
         public AudioEngine() => Last = this;
         public static List<AudioDeviceInfo> ListRenderDevices() => new();
         public void Start(string device)
@@ -90,7 +98,14 @@ namespace BgmSeparator.Audio
             Running = true;
         }
         public void EnsureDevice(string device) { if (!Running) Start(device); }
-        public void AddInput(NAudio.Wave.ISampleProvider input) => Inputs++;
+        // Like the real stereo mixer: anything that is not the mix format is refused.
+        public void AddInput(NAudio.Wave.ISampleProvider input)
+        {
+            if (input.WaveFormat.SampleRate != MixFormat.SampleRate || input.WaveFormat.Channels != MixFormat.Channels)
+                throw new ArgumentException("All mixer inputs must have the same WaveFormat");
+            LastInput = input;
+            Inputs++;
+        }
         public void RemoveInput(NAudio.Wave.ISampleProvider input) { }
         public void Stop() { Running = false; Inputs = 0; }
         public void Dispose() => Stop();
@@ -98,20 +113,26 @@ namespace BgmSeparator.Audio
     public sealed class VorbisLoopSampleProvider(byte[] ogg, bool loop) : NAudio.Wave.ISampleProvider, IDisposable
     {
         public static int Disposals;
-        public NAudio.Wave.WaveFormat WaveFormat { get; } = ogg.Length > 0 || loop ? new() : throw new ArgumentException("Empty audio");
+        /// <summary>Channel count the next decoded track reports, e.g. 4 for a layered song.</summary>
+        public static int Channels = 2;
+        public NAudio.Wave.WaveFormat WaveFormat { get; } = ogg.Length > 0 || loop ? new(44100, Channels) : throw new ArgumentException("Empty audio");
+        public int Read(float[] buffer, int offset, int count) => 0;
         public void Dispose() => Interlocked.Increment(ref Disposals);
     }
     public sealed class FadeSampleProvider(NAudio.Wave.ISampleProvider source, bool startSilent) : NAudio.Wave.ISampleProvider
     {
         public float Volume { get; set; } = startSilent ? 0 : 1;
         public NAudio.Wave.WaveFormat WaveFormat => source.WaveFormat;
+        public int Read(float[] buffer, int offset, int count) => source.Read(buffer, offset, count);
         public void BeginFadeIn(int ms) { }
         public void BeginFadeOut(int ms) { }
     }
     public static class ScdBgmLoader
     {
         public static Func<int, byte[]?> Load = _ => null;
-        public static byte[]? LoadOgg(int song) => Load(song);
+        // Bytes that start with "HCA" are handed on as an HCA stream, which the real decoder plays.
+        public static ScdAudio? LoadTrack(int song) => Load(song) is not { } data ? null : new ScdAudio(
+            data.Length > 2 && data[0] == 'H' && data[1] == 'C' && data[2] == 'A' ? ScdAudioFormat.Hca : ScdAudioFormat.OggVorbis, data);
     }
     public static class GameAudioState
     {

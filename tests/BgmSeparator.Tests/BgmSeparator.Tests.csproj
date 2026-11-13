@@ -11,5 +11,12 @@
     <Compile Include="../../BgmSeparator/Input/HotkeyBinding.cs" Link="HotkeyBinding.cs" />
     <Compile Include="../../BgmSeparator/Input/HotkeyProcessor.cs" Link="HotkeyProcessor.cs" />
     <Compile Include="../../BgmSeparator/Audio/BgmPlaybackCoordinator.cs" Link="BgmPlaybackCoordinator.cs" />
+    <Compile Include="../../BgmSeparator/Audio/StereoLayerSampleProvider.cs" Link="StereoLayerSampleProvider.cs" />
+    <Compile Include="../../BgmSeparator/Audio/ScdOggExtractor.cs" Link="ScdOggExtractor.cs" />
+    <Compile Include="../../BgmSeparator/Audio/HcaLoopSampleProvider.cs" Link="HcaLoopSampleProvider.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The real HCA codec, so format 26 tracks are tested end to end. NAudio stays faked. -->
+    <PackageReference Include="VGAudio" Version="2.2.1" />
   </ItemGroup>
 </Project>

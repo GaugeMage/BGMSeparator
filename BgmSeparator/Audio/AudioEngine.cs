@@ -82,6 +82,14 @@ public sealed class AudioEngine : IDisposable
 
     public void AddInput(ISampleProvider input)
     {
+        // NAudio registers the input before it checks the format, so a mismatched one would
+        // stay in the mixer and be read as garbage. Refuse it before it gets that far.
+        var format = input.WaveFormat;
+        if (format.SampleRate != MixFormat.SampleRate || format.Channels != MixFormat.Channels)
+            throw new ArgumentException(
+                $"Mixer input must be {MixFormat.SampleRate} Hz / {MixFormat.Channels} ch, got {format.SampleRate} Hz / {format.Channels} ch.",
+                nameof(input));
+
         lock (_lock)
         {
             _mixer.AddMixerInput(input);
